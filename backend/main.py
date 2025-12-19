@@ -51,7 +51,14 @@ async def summarize(
 ) -> WikiExtractorResult | WikiExtractorError:
     """
     Gera um resumo do artigo correspondente ao termo informado na Wikipédia.
+
+    Exemplo dos parâmetros de entrada:
+
+    - **word**: "Steve Jobs"
+    - **word_count**: "140"
     
+    Retorna um JSON com as seguintes informações:
+
     - **word**: termo da Wikipedia para o qual os resumos foram salvos.
     - **url**: url da página da Wikipedia.
     - **summary**: texto do resumo gerado.
@@ -70,8 +77,12 @@ async def summarize(
 )
 async def summary_database() -> WikiWordDatabase:
     """
-    Retorna uma lista dos termos da Wikipedia com resumos salvos no banco de dados. 
+    Gera uma lista dos termos da Wikipedia com resumos salvos no banco de dados. 
     Um termos pode aparecer mais de uma vez se houver múltiplos resumos salvos para ele.
+
+    Parâmetros de entrada: nenhum.
+
+    Retorna um JSON com uma lista onde cada item contém as seguintes informações:
     
     - **word**: termo da Wikipedia para o qual os resumos foram salvos.
     - **word_count**: número de palavras para o resumo do artigo.
@@ -99,7 +110,13 @@ async def summary_database() -> WikiWordDatabase:
 )
 async def summary_word_database(word: str) -> WikiSummaryDatabase:
     """
-    Retorna uma lista com as informações dos resumos salvos anteriormente para um determinado termo.
+    Gera uma lista com as informações dos resumos salvos anteriormente para um determinado termo.
+
+    Exemplo dos parâmetros de entrada:
+
+    - **word**: "Steve Jobs"
+
+    Retorna um JSON com uma lista onde cada item contém as seguintes informações:
     
     - **word**: termo da Wikipedia para o qual os resumos foram salvos.
     - **word_count**: número de palavras para o resumo do artigo.
