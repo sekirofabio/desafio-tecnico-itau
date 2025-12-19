@@ -12,6 +12,7 @@ SYSTEM_PROMPT = '''
     3. **Coherence:** Ensure that the summary flows logically from one point to the next. **Do not** create or add
     informations that are not in the original article. Avoid personal opinions or biases.
     4. **Size:** Respect the limit of {word_count} words in summary.
+    5. **Do not change the language:** the summary must always be generated in **Brazilian Portuguese**.
     
     Here is the Wikipedia article text to summarize:
     
