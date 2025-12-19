@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from typing import List
 
 from fastapi import FastAPI, Depends
@@ -23,13 +24,14 @@ from schemas import WikiWordDatabase
 from schemas import WikiSavedSummary
 from schemas import WikiSummaryDatabase
 
-app = FastAPI(title="Wikipedia Summarizer API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    yield
+
+app = FastAPI(title="Wikipedia Summarizer API", lifespan=lifespan)
 
 load_dotenv()
-
-@app.on_event("startup")
-def on_startup() -> None:
-    Base.metadata.create_all(bind=engine)
 
 @app.get("/health", summary="Health Test")
 def health() -> dict:
@@ -119,4 +121,3 @@ async def summary_word_database(word: str) -> WikiSummaryDatabase:
         ]
 
     return WikiSummaryDatabase(summaries=saved_summaries)
-
