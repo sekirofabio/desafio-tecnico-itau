@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import re
-
+from urllib.parse import unquote
 from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import quote
@@ -21,6 +21,7 @@ from db import engine
 from models import Article, Summary
 
 from schemas import WikiExtractorResult
+from schemas import WikiExtractorError
 
 from utils.summarizer import text_summarizer
 
@@ -31,6 +32,28 @@ class WikipediaPageNotFoundError(Exception):
     Raised when the Wikipedia page for a given word does not exist.
     """
 
+def normalize_word(word: str) -> str:
+    word = word and word.strip() or ''
+    base = re.sub(r"\s+", " ", word)
+
+    words = base.split(" ")
+    normalized_words: list[str] = []
+
+    for word in words:
+        lower = word.lower()
+
+        if lower in STOPWORDS:
+            normalized_words.append(lower)
+        else:
+            normalized_words.append(lower.capitalize())
+
+    return '_'.join(normalized_words)
+
+def format_url(word: str) -> str:
+    wiki_word = normalize_word(word)
+
+    return f"https://pt.wikipedia.org/wiki/{quote(wiki_word, safe=':_()')}"
+
 class WikipediaTextExtractor:
     def __init__(self, word: str, word_count: int = 150) -> None:
         self.word = word and word.strip() or ''
@@ -38,30 +61,12 @@ class WikipediaTextExtractor:
         self.raw_text = ''
         self.clean_text = ''
         self.summary_text = ''
-        self.wiki_word = ''
+        self.wiki_word = normalize_word(self.word)
         self.article = None
         self.article_id = None
         self.summary = None
 
-        self.normalize_word()
-
-        self.url = f"https://pt.wikipedia.org/wiki/{quote(self.wiki_word, safe=':_()')}"
-
-    def normalize_word(self) -> None:
-        base = re.sub(r"\s+", " ", self.word)
-
-        words = base.split(" ")
-        normalized_words: list[str] = []
-
-        for word in words:
-            lower = word.lower()
-
-            if lower in STOPWORDS:
-                normalized_words.append(lower)
-            else:
-                normalized_words.append(lower.capitalize())
-
-        self.wiki_word = '_'.join(normalized_words)
+        self.url = format_url(self.word)
 
     def fecth_article(self) -> None:
         session = requests.Session()
@@ -72,7 +77,7 @@ class WikipediaTextExtractor:
 
         resp = session.get(self.url, headers=headers, timeout=15.0, allow_redirects=True)
         if resp.status_code == 404:
-            raise WikipediaPageNotFoundError(f'Wikipedia page not found for "{self.word}": {url}')
+            raise WikipediaPageNotFoundError(f'Wikipedia page not found for "{self.word}": {self.url}')
 
         resp.raise_for_status()
 
@@ -112,20 +117,20 @@ class WikipediaTextExtractor:
         if not self.clean_text:
             raise WikipediaPageNotFoundError(f'No extractable text found for "{self.word}"')
         
-    def text_summary(self) -> None:
-        summary = text_summarizer(self.clean_text, word_count=self.word_count)
+    async def text_summary(self) -> None:
+        summary = await text_summarizer(self.clean_text, word_count=self.word_count)
 
         self.summary_text = summary
 
-    def extract_from_wikipedia(self) -> None:
+    async def extract_from_wikipedia(self) -> None:
         self.fecth_article()
         self.text_cleaner()
         self.save_article()
 
-        self.text_summary()
+        await self.text_summary()
         self.save_summary()
 
-    def load_summary(self) -> None:
+    async def load_summary(self) -> None:
         if not self.wiki_word:
             return
         
@@ -146,7 +151,7 @@ class WikipediaTextExtractor:
 
         if not self.article:
             print('Load from Wikipedia.')
-            self.extract_from_wikipedia()
+            await self.extract_from_wikipedia()
         elif self.summary:
             print('Load from database.')
             self.summary_text = self.summary.summary_text
@@ -155,7 +160,7 @@ class WikipediaTextExtractor:
 
             self.clean_text = self.article.clean_text
 
-            self.text_summary()
+            await self.text_summary()
             self.save_summary()
 
     def save_article(self) -> None:
@@ -194,8 +199,15 @@ class WikipediaTextExtractor:
 
         self.summary = summary
     
-    def extract(self) -> WikiExtractorResult:
-        self.load_summary()
+    async def extract(self) -> WikiExtractorResult | WikiExtractorError:
+        try:
+            await self.load_summary()
+        except WikipediaPageNotFoundError as e:
+            return WikiExtractorError(
+                word=self.word,
+                url=self.url,
+                message='Página da Wikipedia não encontrada para o termo solicitado.'
+            )
 
         return WikiExtractorResult(
             word=self.word,

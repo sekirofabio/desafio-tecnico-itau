@@ -3,7 +3,7 @@ from langchain_core.prompts import PromptTemplate
 
 from utils.prompt import SYSTEM_PROMPT
 
-def text_summarizer(original_text: str, word_count: int) -> str:
+async def text_summarizer(original_text: str, word_count: int) -> str:
     """
     Summarize a text into a given number of words using LangChain LCEL.
     """
@@ -20,7 +20,7 @@ def text_summarizer(original_text: str, word_count: int) -> str:
 
     chain = prompt | llm
 
-    response = chain.invoke({
+    response = await chain.ainvoke({
         "original_text": original_text,
         "word_count": word_count
     })
