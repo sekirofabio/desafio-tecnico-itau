@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import re
 
 from dataclasses import dataclass
@@ -16,9 +20,7 @@ from db import engine
 
 from models import Article, Summary
 
-from dotenv import load_dotenv
-
-load_dotenv()
+from schemas import WikiExtractorResult
 
 from utils.summarizer import text_summarizer
 
@@ -29,12 +31,6 @@ class WikipediaPageNotFoundError(Exception):
     Raised when the Wikipedia page for a given word does not exist.
     """
 
-@dataclass(frozen=True)
-class WikipediaFetchResult:
-    word: str
-    url: str
-    text: str
-
 class WikipediaTextExtractor:
     def __init__(self, word: str, word_count: int = 150) -> None:
         self.word = word and word.strip() or ''
@@ -44,11 +40,14 @@ class WikipediaTextExtractor:
         self.summary_text = ''
         self.wiki_word = ''
         self.article = None
+        self.article_id = None
         self.summary = None
 
         self.normalize_word()
 
-    def normalize_word(self) -> str:
+        self.url = f"https://pt.wikipedia.org/wiki/{quote(self.wiki_word, safe=':_()')}"
+
+    def normalize_word(self) -> None:
         base = re.sub(r"\s+", " ", self.word)
 
         words = base.split(" ")
@@ -62,20 +61,16 @@ class WikipediaTextExtractor:
             else:
                 normalized_words.append(lower.capitalize())
 
-        print(normalized_words)
-
         self.wiki_word = '_'.join(normalized_words)
 
     def fecth_article(self) -> None:
-        url = f"https://pt.wikipedia.org/wiki/{quote(self.wiki_word, safe=':_()')}"
-
         session = requests.Session()
         headers: dict = {
             "User-Agent": "Mozilla/5.0 (compatible; WikipediaFetcher/1.0; +https://example.com)",
             "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
         }
 
-        resp = session.get(url, headers=headers, timeout=15.0, allow_redirects=True)
+        resp = session.get(self.url, headers=headers, timeout=15.0, allow_redirects=True)
         if resp.status_code == 404:
             raise WikipediaPageNotFoundError(f'Wikipedia page not found for "{self.word}": {url}')
 
@@ -147,6 +142,7 @@ class WikipediaTextExtractor:
 
         self.article = article
         self.summary = summary
+        self.article_id = article.id if article else None
 
         if not self.article:
             print('Load from Wikipedia.')
@@ -177,16 +173,18 @@ class WikipediaTextExtractor:
 
             session.add(article)
             session.commit()
+            session.refresh(article)
 
         self.article = article
+        self.article_id = article.id
 
     def save_summary(self) -> None:
         with Session(engine) as session:
-            if not self.article:
+            if not self.article_id:
                 return
             
             summary = Summary(
-                article_id=self.article.id,
+                article_id=self.article_id,
                 word_count=self.word_count,
                 summary_text=self.summary_text
             )
@@ -196,7 +194,11 @@ class WikipediaTextExtractor:
 
         self.summary = summary
     
-    def extract(self) -> None:
+    def extract(self) -> WikiExtractorResult:
         self.load_summary()
 
-        print(self.summary_text)
+        return WikiExtractorResult(
+            word=self.word,
+            url=self.url,
+            summary=self.summary_text
+        )
